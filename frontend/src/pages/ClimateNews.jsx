@@ -54,10 +54,12 @@ const SAMPLE_ARTICLES = [
 const FILTER_CHIPS = [
   { label: 'All', q: '' },
   { label: 'Flooding', q: 'India floods' },
-  { label: 'Drought', q: 'global warming' },
-  { label: 'Temperature', q: 'record temperatures' },
+  { label: 'Heatwaves', q: 'record temperatures' },
   { label: 'Arctic', q: 'arctic warming' },
   { label: 'Oceans', q: 'sea ice' },
+  { label: 'Coral Reefs', q: 'coral bleaching' },
+  { label: 'Emissions', q: 'CO2' },
+  { label: 'Antarctica', q: 'ice sheet' },
 ];
 
 const ClimateNews = () => {
@@ -221,6 +223,11 @@ const ClimateNews = () => {
                           <span key={kw} className="px-2 py-0.5 text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 rounded uppercase">{kw}</span>
                         ))}
                       </div>
+                    )}
+                    {article.url && article.url !== '#' && (
+                      <a href={article.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-primary font-semibold text-sm hover:underline mt-3">
+                        Read more <span className="material-symbols-outlined text-sm ml-1">arrow_forward</span>
+                      </a>
                     )}
                   </div>
                 </div>

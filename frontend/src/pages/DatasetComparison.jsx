@@ -61,6 +61,41 @@ const DatasetComparison = () => {
     }
   };
 
+  const downloadReport = () => {
+    if (!result) return;
+    
+    const report = {
+      generatedAt: new Date().toISOString(),
+      platform: 'PyClima Explorer',
+      analysisType: 'Dataset Comparison',
+      variable: result.variable,
+      datasetA: {
+        id: selectedA?._id,
+        name: selectedA?.name || selectedA?.filename || 'Unknown',
+      },
+      datasetB: {
+        id: selectedB?._id,
+        name: selectedB?.name || selectedB?.filename || 'Unknown',
+      },
+      gridSize: `${result.datasetA?.latitudes?.length || 0} lat × ${result.datasetA?.longitudes?.length || 0} lon`,
+      data: {
+        difference: result.difference,
+        datasetA: result.datasetA?.values,
+        datasetB: result.datasetB?.values,
+        latitudes: result.datasetA?.latitudes,
+        longitudes: result.datasetA?.longitudes,
+      }
+    };
+
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pyclima-compare-report-${result.variable}-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <>
       {/* TopBar */}
@@ -164,6 +199,21 @@ const DatasetComparison = () => {
         {/* Results — real data from backend */}
         {result && (
           <div className="space-y-8">
+            <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm mb-2">
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-2xl">compare_arrows</span>
+                  Comparison Results
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  Grid size: {result.datasetA?.latitudes?.length || 0} × {result.datasetA?.longitudes?.length || 0}
+                </p>
+              </div>
+              <button onClick={downloadReport} className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg transition-colors shadow-sm">
+                <span className="material-symbols-outlined text-sm">download</span> Download Report
+              </button>
+            </div>
+
             <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm mb-6">
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary">difference</span>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { listDatasets, getMapData, getPredictionTrend } from '../services/api';
+import { listDatasets, getMapData, getLocationTrend, getGlobalMean } from '../services/api';
 
 const ReportExport = () => {
   const { user, isPro } = useAuth();
@@ -39,6 +39,7 @@ const ReportExport = () => {
       const report = {
         generatedAt: new Date().toISOString(),
         generatedBy: user?.name || 'Unknown',
+        platform: 'PyClima Explorer',
         dataset: {
           id: selectedDs?._id,
           name: selectedDs?.name || selectedDs?.filename,
@@ -56,15 +57,51 @@ const ReportExport = () => {
 
       // Fetch actual map data for the first variable
       if (dataVars.length > 0) {
+        const varName = dataVars[0];
         try {
-          const mapResult = await getMapData(selectedDatasetId, dataVars[0]);
-          report.visualizationData = {
-            variable: dataVars[0],
-            latitudeCount: mapResult.latitudes?.length,
-            longitudeCount: mapResult.longitudes?.length,
+          const mapResult = await getMapData(selectedDatasetId, varName);
+          const allVals = mapResult.values?.flat().filter(v => v != null && !isNaN(v)) || [];
+          report.spatialAnalysis = {
+            variable: varName,
+            gridSize: `${mapResult.latitudes?.length} lat × ${mapResult.longitudes?.length} lon`,
+            latRange: mapResult.latitudes ? `${Math.min(...mapResult.latitudes).toFixed(1)}° to ${Math.max(...mapResult.latitudes).toFixed(1)}°` : null,
+            lonRange: mapResult.longitudes ? `${Math.min(...mapResult.longitudes).toFixed(1)}° to ${Math.max(...mapResult.longitudes).toFixed(1)}°` : null,
+            statistics: {
+              min: allVals.length > 0 ? Math.min(...allVals).toFixed(4) : null,
+              max: allVals.length > 0 ? Math.max(...allVals).toFixed(4) : null,
+              mean: allVals.length > 0 ? (allVals.reduce((a, b) => a + b, 0) / allVals.length).toFixed(4) : null,
+              totalGridPoints: allVals.length,
+            },
             dataSample: mapResult.values?.slice(0, 3)?.map(row => row?.slice(0, 5)),
           };
         } catch { /* skip if fails */ }
+
+        // Fetch trend analysis (center of the grid)
+        if (includePredictions) {
+          try {
+            const trendResult = await getLocationTrend(selectedDatasetId, varName, 20, 78);
+            report.trendAnalysis = {
+              variable: varName,
+              location: `${trendResult.actualLat?.toFixed(1)}°, ${trendResult.actualLon?.toFixed(1)}°`,
+              dataPoints: trendResult.times?.length || 0,
+              trendPerYear: trendResult.trendPerYear,
+              trendDirection: trendResult.trendPerYear > 0 ? 'increasing' : 'decreasing',
+              anomalyCount: trendResult.anomalyTimes?.length || 0,
+              timeRange: trendResult.times ? `${trendResult.times[0]} to ${trendResult.times[trendResult.times.length - 1]}` : null,
+            };
+          } catch { /* skip if fails */ }
+
+          try {
+            const globalResult = await getGlobalMean(selectedDatasetId, varName);
+            report.globalMeanAnalysis = {
+              variable: varName,
+              dataPoints: globalResult.times?.length || 0,
+              trendPerYear: globalResult.trendPerYear,
+              trendDirection: globalResult.trendPerYear > 0 ? 'increasing' : 'decreasing',
+              anomalyCount: globalResult.anomalyTimes?.length || 0,
+            };
+          } catch { /* skip if fails */ }
+        }
       }
 
       // Download as JSON
@@ -162,7 +199,10 @@ const ReportExport = () => {
                 
                 <div className="flex-1 font-mono text-[10px] sm:text-[11px] leading-relaxed text-slate-600 space-y-2">
                   <p>✓ Dataset metadata and spatial coverage summary</p>
-                  {includePredictions && <p>✓ ML trend predictions (Linear Regression)</p>}
+                  <p>✓ Spatial grid statistics (min / max / mean / grid size)</p>
+                  {includePredictions && <p>✓ Time-series trend analysis (trend rate per year)</p>}
+                  {includePredictions && <p>✓ Anomaly detection (2σ outlier count)</p>}
+                  {includePredictions && <p>✓ Global spatial mean analysis (cosine-weighted)</p>}
                   {includeComparison && <p>✓ Multi-dataset comparison analysis</p>}
                   {includeAnnotations && <p>✓ User annotations and discussion threads</p>}
                   <p>✓ Variable distributions and grid summary</p>

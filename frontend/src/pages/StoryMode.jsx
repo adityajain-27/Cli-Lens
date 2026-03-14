@@ -1,38 +1,73 @@
 import React, { useState, useEffect } from 'react';
 import { getStories, getStory, getComments, addComment } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import Plotly from 'plotly.js-dist-min';
+import factoryModule from 'react-plotly.js/factory';
+
+const createPlotlyComponent = factoryModule.default || factoryModule;
+const Plot = createPlotlyComponent(Plotly);
 
 // Fallback stories shown when the backend is offline
 const SAMPLE_STORIES = [
   {
-    id: 'story-1',
-    title: 'The Warming Arctic: A Race Against Time',
+    id: 'arctic-warming',
+    title: 'Arctic Warming',
     region: 'Arctic Circle',
     variable: 'temperature',
-    description: 'Arctic temperatures are rising four times faster than the global average. This story explores the cascading effects on sea ice, permafrost, and global weather patterns.',
-    highlight: 'The Arctic could be ice-free in summer as early as 2035, fundamentally altering ecosystems and global ocean circulation.',
-    centerLat: '78.2', centerLon: '15.5',
-    newsKeywords: ['arctic warming', 'sea ice', 'permafrost'],
+    description: 'The Arctic is warming nearly four times faster than the global average. Sea ice extent has declined dramatically since the 1980s, opening new shipping routes but disrupting ecosystems.',
+    highlight: 'Temperature anomalies in the Arctic exceed +3°C above baseline in recent decades, with September sea ice extent declining at 13% per decade.',
+    centerLat: '80', centerLon: '0',
+    newsKeywords: ['arctic warming', 'sea ice', 'polar vortex'],
   },
   {
-    id: 'story-2',
-    title: 'Monsoon Extremes: Too Much, Too Little',
+    id: 'extreme-rainfall-india',
+    title: 'Extreme Rainfall Zones — India',
     region: 'South Asia',
     variable: 'precipitation',
-    description: 'Climate change is intensifying South Asian monsoon variability, bringing devastating floods to some regions while creating severe drought conditions in others.',
-    highlight: 'Extreme precipitation events have increased 30% in frequency since 2000 across South Asia.',
-    centerLat: '20.5', centerLon: '78.9',
-    newsKeywords: ['India floods', 'monsoon', 'drought'],
+    description: 'Monsoon patterns in India are becoming increasingly erratic. Some regions experience intense flooding while others face unprecedented drought.',
+    highlight: 'Precipitation variability has increased by 20% since 1980 over peninsular India.',
+    centerLat: '22', centerLon: '80',
+    newsKeywords: ['India floods', 'monsoon', 'extreme rainfall India'],
   },
   {
-    id: 'story-3',
-    title: 'Ocean Heat Content: The Hidden Crisis',
-    region: 'Global Oceans',
+    id: 'rising-global-temperatures',
+    title: 'Rising Global Temperatures',
+    region: 'Global',
     variable: 'temperature',
-    description: 'The oceans have absorbed over 90% of the excess heat trapped by greenhouse gases. As ocean heat content rises, we see intensified hurricanes, coral bleaching, and sea-level rise.',
-    highlight: 'Ocean heat content in 2026 surpassed all previous records, with the top 2000m of ocean absorbing unprecedented amounts of thermal energy.',
-    centerLat: '0', centerLon: '-30',
-    newsKeywords: ['sea level rise', 'coral bleaching', 'ocean warming'],
+    description: 'Global mean surface temperature has risen by ~1.2°C since pre-industrial times. The last decade was the warmest on record.',
+    highlight: '2024 shattered temperature records globally, with mean surface temperature reaching 1.35°C above the pre-industrial baseline.',
+    centerLat: '0', centerLon: '0',
+    newsKeywords: ['global warming', 'climate change', 'record temperatures'],
+  },
+  {
+    id: 'coral-reef-crisis',
+    title: 'The Coral Reef Crisis',
+    region: 'Indo-Pacific',
+    variable: 'temperature',
+    description: 'Rising ocean temperatures are triggering mass coral bleaching events worldwide. The Great Barrier Reef has experienced five mass bleaching events since 2016.',
+    highlight: 'Over 50% of the world\'s coral reefs have been lost in the past 30 years.',
+    centerLat: '-18', centerLon: '150',
+    newsKeywords: ['coral bleaching', 'ocean warming', 'marine ecosystems'],
+  },
+  {
+    id: 'sahel-desertification',
+    title: 'Sahel Desertification',
+    region: 'West Africa',
+    variable: 'precipitation',
+    description: 'The Sahel region is experiencing rapid desertification as changing rainfall patterns push the Sahara further south, threatening food security for over 100 million people.',
+    highlight: 'The Sahara has expanded by approximately 10% since 1920.',
+    centerLat: '14', centerLon: '0',
+    newsKeywords: ['desertification', 'drought', 'dust storms'],
+  },
+  {
+    id: 'antarctic-ice-sheet',
+    title: 'Antarctic Ice Sheet Collapse',
+    region: 'Antarctica',
+    variable: 'temperature',
+    description: 'The West Antarctic Ice Sheet is considered the most vulnerable major ice body to climate change. Its collapse could raise global sea levels by up to 3 meters.',
+    highlight: 'Antarctica is losing ice mass at an accelerating rate of 150 billion tonnes per year — triple the rate from the 1990s.',
+    centerLat: '-75', centerLon: '0',
+    newsKeywords: ['sea level rise', 'ice sheet', 'Antarctica'],
   },
 ];
 
@@ -160,8 +195,8 @@ const StoryMode = () => {
           </div>
         )}
 
-        {/* Story Cards Grid */}
-        {!loadingStories && stories.length > 0 && (
+        {/* Story Cards Grid — hidden when a story is open */}
+        {!loadingStories && stories.length > 0 && !activeStory && !loadingStory && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
             {stories.map((story) => (
               <div
@@ -250,27 +285,50 @@ const StoryMode = () => {
               {/* Visual column */}
               <div className="w-full lg:w-2/5 bg-slate-50 dark:bg-slate-950/50 p-6 sm:p-8 lg:p-12 flex flex-col gap-8">
                 {/* Globe centred on story */}
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="font-bold text-sm">Focus Region</h4>
-                    <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded font-mono">
-                      {activeStory.centerLat}°N, {activeStory.centerLon}°E
-                    </span>
-                  </div>
-                  <div
-                    className="aspect-square rounded-xl overflow-hidden relative"
-                    style={{
-                      background:
-                        activeStory.variable === 'temperature'
-                          ? 'radial-gradient(circle at 60% 40%, #f43f5e 0%, transparent 40%), radial-gradient(circle at 30% 60%, #fb923c 0%, transparent 50%), #1e293b'
-                          : 'radial-gradient(circle at 40% 50%, #0ea5e9 0%, transparent 50%), radial-gradient(circle at 65% 30%, #10b981 0%, transparent 40%), #1e293b',
-                    }}
-                  >
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="material-symbols-outlined text-white/20 text-9xl">public</span>
+                  <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-bold text-sm">Focus Region</h4>
+                      <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded font-mono">
+                        {activeStory.centerLat}°{activeStory.centerLat >= 0 ? 'N' : 'S'}, {activeStory.centerLon}°E
+                      </span>
+                    </div>
+                    <div className="rounded-xl overflow-hidden" style={{ height: '250px' }}>
+                      <Plot
+                        data={[{
+                          type: 'scattergeo',
+                          lat: [parseFloat(activeStory.centerLat)],
+                          lon: [parseFloat(activeStory.centerLon)],
+                          marker: { size: 12, color: '#ef4444', symbol: 'circle', line: { color: '#fff', width: 2 } },
+                          text: [activeStory.region],
+                          hoverinfo: 'text',
+                        }]}
+                        layout={{
+                          geo: {
+                            projection: { type: 'orthographic', rotation: { lon: parseFloat(activeStory.centerLon), lat: parseFloat(activeStory.centerLat) } },
+                            showland: true,
+                            landcolor: 'rgb(34, 85, 34)',
+                            showocean: true,
+                            oceancolor: 'rgb(10, 50, 100)',
+                            showcoastlines: true,
+                            coastlinecolor: 'rgba(200,200,180,0.5)',
+                            showcountries: true,
+                            countrycolor: 'rgba(200,200,180,0.3)',
+                            showlakes: true,
+                            lakecolor: 'rgb(20, 70, 130)',
+                            showframe: false,
+                            bgcolor: 'rgba(0,0,0,0)',
+                          },
+                          paper_bgcolor: 'rgba(0,0,0,0)',
+                          plot_bgcolor: 'rgba(0,0,0,0)',
+                          margin: { t: 0, l: 0, r: 0, b: 0 },
+                          autosize: true,
+                        }}
+                        useResizeHandler={true}
+                        style={{ width: '100%', height: '100%' }}
+                        config={{ displayModeBar: false, responsive: true, scrollZoom: true }}
+                      />
                     </div>
                   </div>
-                </div>
 
                 {/* Comments panel */}
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">

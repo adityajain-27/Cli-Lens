@@ -63,6 +63,91 @@ const ClimatePredictions = () => {
 
   const anyLoading = locationLoading || globalLoading;
 
+  // Download analysis report as JSON
+  const downloadReport = (type) => {
+    const report = {
+      generatedAt: new Date().toISOString(),
+      platform: 'PyClima Explorer',
+      dataset: selectedDs?.name || selectedDs?.filename || 'Unknown',
+      variable,
+    };
+
+    if (type === 'location' && locationResult) {
+      report.analysisType = 'Location Time Series Trend Analysis';
+      report.location = {
+        requestedLat: parseFloat(lat),
+        requestedLon: parseFloat(lon),
+        actualLat: locationResult.actualLat,
+        actualLon: locationResult.actualLon,
+      };
+      report.summary = {
+        dataPoints: locationResult.times?.length || 0,
+        trendPerYear: locationResult.trendPerYear,
+        trendDirection: locationResult.trendPerYear > 0 ? 'increasing' : 'decreasing',
+        anomalyCount: locationResult.anomalyTimes?.length || 0,
+        timeRange: locationResult.times ? `${locationResult.times[0]} to ${locationResult.times[locationResult.times.length - 1]}` : null,
+      };
+      report.data = {
+        times: locationResult.times,
+        values: locationResult.values,
+        rollingMean: locationResult.rollingMean,
+        trendLine: locationResult.trendLine,
+        anomalyTimes: locationResult.anomalyTimes,
+        anomalyValues: locationResult.anomalyValues,
+      };
+    } else if (type === 'global' && globalResult) {
+      report.analysisType = 'Global Spatial Mean Analysis (Cosine-latitude weighted)';
+      report.summary = {
+        dataPoints: globalResult.times?.length || 0,
+        trendPerYear: globalResult.trendPerYear,
+        trendDirection: globalResult.trendPerYear > 0 ? 'increasing' : 'decreasing',
+        anomalyCount: globalResult.anomalyTimes?.length || 0,
+        timeRange: globalResult.times ? `${globalResult.times[0]} to ${globalResult.times[globalResult.times.length - 1]}` : null,
+      };
+      report.data = {
+        times: globalResult.times,
+        values: globalResult.values,
+        rollingMean: globalResult.rollingMean,
+        trendLine: globalResult.trendLine,
+        anomalyTimes: globalResult.anomalyTimes,
+        anomalyValues: globalResult.anomalyValues,
+      };
+    } else if (type === 'full') {
+      report.analysisType = 'Full Analysis Report';
+      if (locationResult) {
+        report.locationAnalysis = {
+          location: `${locationResult.actualLat?.toFixed(1)}°, ${locationResult.actualLon?.toFixed(1)}°`,
+          dataPoints: locationResult.times?.length || 0,
+          trendPerYear: locationResult.trendPerYear,
+          anomalyCount: locationResult.anomalyTimes?.length || 0,
+          times: locationResult.times,
+          values: locationResult.values,
+          rollingMean: locationResult.rollingMean,
+          trendLine: locationResult.trendLine,
+        };
+      }
+      if (globalResult) {
+        report.globalMeanAnalysis = {
+          dataPoints: globalResult.times?.length || 0,
+          trendPerYear: globalResult.trendPerYear,
+          anomalyCount: globalResult.anomalyTimes?.length || 0,
+          times: globalResult.times,
+          values: globalResult.values,
+          rollingMean: globalResult.rollingMean,
+          trendLine: globalResult.trendLine,
+        };
+      }
+    }
+
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pyclima-${type}-report-${variable}-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <>
       {/* Topbar */}
@@ -187,24 +272,29 @@ const ClimatePredictions = () => {
         {/* Section 1: Location Time Series Trend Analysis */}
         {locationResult && (
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <span className="material-symbols-outlined text-primary text-2xl">timeline</span>
-              <div>
-                <h3 className="font-bold text-lg">
-                  {variable.toUpperCase()} Time Series at {locationResult.actualLat?.toFixed(1)}°{locationResult.actualLat >= 0 ? 'N' : 'S'}, {locationResult.actualLon?.toFixed(1)}°E
-                </h3>
-                <p className="text-sm text-slate-500">
-                  {locationResult.times?.length || 0} data points •
-                  {locationResult.trendPerYear != null && (
-                    <span className={locationResult.trendPerYear > 0 ? ' text-red-400' : ' text-blue-400'}>
-                      {' '}Trend: {locationResult.trendPerYear > 0 ? '+' : ''}{locationResult.trendPerYear.toFixed(4)}/yr
-                    </span>
-                  )}
-                  {locationResult.anomalyTimes?.length > 0 && (
-                    <span className="text-amber-400"> • {locationResult.anomalyTimes.length} anomalies detected</span>
-                  )}
-                </p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-primary text-2xl">timeline</span>
+                <div>
+                  <h3 className="font-bold text-lg">
+                    {variable.toUpperCase()} Time Series at {locationResult.actualLat?.toFixed(1)}°{locationResult.actualLat >= 0 ? 'N' : 'S'}, {locationResult.actualLon?.toFixed(1)}°E
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    {locationResult.times?.length || 0} data points •
+                    {locationResult.trendPerYear != null && (
+                      <span className={locationResult.trendPerYear > 0 ? ' text-red-400' : ' text-blue-400'}>
+                        {' '}Trend: {locationResult.trendPerYear > 0 ? '+' : ''}{locationResult.trendPerYear.toFixed(4)}/yr
+                      </span>
+                    )}
+                    {locationResult.anomalyTimes?.length > 0 && (
+                      <span className="text-amber-400"> • {locationResult.anomalyTimes.length} anomalies detected</span>
+                    )}
+                  </p>
+                </div>
               </div>
+              <button onClick={() => downloadReport('location')} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition-colors shadow-sm">
+                <span className="material-symbols-outlined text-sm">download</span> Download
+              </button>
             </div>
             <PlotlyLineChart
               data={locationResult}
@@ -221,27 +311,45 @@ const ClimatePredictions = () => {
 
         {globalResult && (
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <span className="material-symbols-outlined text-primary text-2xl">public</span>
-              <div>
-                <h3 className="font-bold text-lg">
-                  Global Spatial Mean Over Time — {variable.toUpperCase()}
-                </h3>
-                <p className="text-sm text-slate-500">
-                  Cosine-latitude weighted global average •
-                  {globalResult.trendPerYear != null && (
-                    <span className={globalResult.trendPerYear > 0 ? ' text-red-400' : ' text-blue-400'}>
-                      {' '}Trend: {globalResult.trendPerYear > 0 ? '+' : ''}{globalResult.trendPerYear.toFixed(4)}/yr
-                    </span>
-                  )}
-                </p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-primary text-2xl">public</span>
+                <div>
+                  <h3 className="font-bold text-lg">
+                    Global Spatial Mean Over Time — {variable.toUpperCase()}
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    Cosine-latitude weighted global average •
+                    {globalResult.trendPerYear != null && (
+                      <span className={globalResult.trendPerYear > 0 ? ' text-red-400' : ' text-blue-400'}>
+                        {' '}Trend: {globalResult.trendPerYear > 0 ? '+' : ''}{globalResult.trendPerYear.toFixed(4)}/yr
+                      </span>
+                    )}
+                  </p>
+                </div>
               </div>
+              <button onClick={() => downloadReport('global')} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition-colors shadow-sm">
+                <span className="material-symbols-outlined text-sm">download</span> Download
+              </button>
             </div>
             <PlotlyLineChart
               data={globalResult}
               title={`${variable.toUpperCase()} (Global Mean) Time Series`}
               subtitle="Cosine-latitude weighted global spatial mean at each time step"
             />
+          </div>
+        )}
+
+        {/* Full Report Download */}
+        {(locationResult || globalResult) && (
+          <div className="flex justify-center mt-2">
+            <button
+              onClick={() => downloadReport('full')}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold rounded-xl transition-all shadow-lg shadow-amber-500/20 transform active:scale-[0.98]"
+            >
+              <span className="material-symbols-outlined">summarize</span>
+              Download Full Analysis Report
+            </button>
           </div>
         )}
 
