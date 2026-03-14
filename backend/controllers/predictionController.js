@@ -39,11 +39,6 @@ export const getPredictionTrend = async (req, res) => {
     try {
         const { datasetId, variable, lat, lon } = req.query;
 
-        // Simulate Pro tier check
-        if (!req.user.isPro) {
-            return res.status(403).json({ message: "Pro tier required for predictive modeling" });
-        }
-
         if (!datasetId || !variable || !lat || !lon) {
             return res.status(400).json({ message: "datasetId, variable, lat, and lon are required" });
         }
@@ -54,15 +49,11 @@ export const getPredictionTrend = async (req, res) => {
         }
 
         const result = await runPythonScript("predict_trend.py", [
-            dataset.filePath, 
+            dataset.filepath, 
             variable, 
             lat, 
             lon
         ]);
-
-        if (!result.success) {
-            return res.status(500).json({ message: result.error });
-        }
 
         res.json(result);
 

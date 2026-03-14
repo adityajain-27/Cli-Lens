@@ -12,7 +12,8 @@ from sklearn.linear_model import LinearRegression
 
 
 def predict_trend(filepath, variable, lat, lon):
-    ds = xr.open_dataset(filepath, engine="netcdf4")
+    time_coder = xr.coders.CFDatetimeCoder(use_cftime=True)
+    ds = xr.open_dataset(filepath, engine="netcdf4", decode_times=time_coder)
 
     if variable not in ds:
         print(json.dumps({"error": f"Variable '{variable}' not found"}))
@@ -29,11 +30,27 @@ def predict_trend(filepath, variable, lat, lon):
         print(json.dumps({"error": "No time dimension in this dataset"}))
         sys.exit(1)
 
-    # Aggregate to annual means
-    years = np.array(sorted(set(data.time.dt.year.values)))
+    # Aggregate to annual means — handle cftime objects
+    try:
+        raw_years = data.time.dt.year.values
+    except Exception:
+        # For cftime objects, extract year manually
+        raw_years = np.array([t.year for t in data.time.values])
+
+    years = np.array(sorted(set(raw_years)))
+
+    # Climatology datasets may have only 1 unique year (e.g. year 1)
+    if len(years) < 2:
+        print(json.dumps({
+            "error": f"This dataset has only {len(years)} unique year(s) ({years.tolist()}). "
+                     "Prediction requires multi-year time series data. "
+                     "Try uploading a dataset with multiple years of observations."
+        }))
+        sys.exit(1)
+
     annual_means = []
     for yr in years:
-        year_data = data.sel(time=data.time.dt.year == yr).values
+        year_data = data.sel(time=raw_years == yr).values
         mean_val = float(np.nanmean(year_data))
         annual_means.append(mean_val)
 

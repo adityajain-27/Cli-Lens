@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { listDatasets, compareDatasets as apiCompare } from '../services/api';
+import PlotlyHeatmap from '../components/PlotlyHeatmap';
 
 const DatasetComparison = () => {
   const { isPro, user } = useAuth();
@@ -10,7 +11,15 @@ const DatasetComparison = () => {
 
   const [datasetIdA, setDatasetIdA] = useState('');
   const [datasetIdB, setDatasetIdB] = useState('');
-  const [variable, setVariable] = useState('temperature');
+  const [variable, setVariable] = useState('');
+
+  // Collect variables common to BOTH selected datasets
+  const EXCLUDED = ['climatology_bounds', 'valid_yr_count', 'lat', 'lon', 'level', 'time', 'latitude', 'longitude'];
+  const selectedA = datasets.find(d => d._id === datasetIdA);
+  const selectedB = datasets.find(d => d._id === datasetIdB);
+  const varsA = (selectedA?.variables || []).filter(v => !EXCLUDED.includes(v));
+  const varsB = new Set((selectedB?.variables || []).filter(v => !EXCLUDED.includes(v)));
+  const commonVars = selectedB ? varsA.filter(v => varsB.has(v)) : varsA;
 
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -24,11 +33,21 @@ const DatasetComparison = () => {
       .finally(() => setLoadingDatasets(false));
   }, []);
 
+  // Auto-select first common variable when dataset selections change
+  useEffect(() => {
+    if (commonVars.length > 0 && !commonVars.includes(variable)) {
+      setVariable(commonVars[0]);
+    } else if (commonVars.length === 0) {
+      setVariable('');
+    }
+  }, [datasetIdA, datasetIdB]);
+
   const handleCompare = async () => {
     setError('');
     setResult(null);
     if (!datasetIdA || !datasetIdB) { setError('Please select both datasets.'); return; }
     if (datasetIdA === datasetIdB) { setError('Please select two different datasets.'); return; }
+    if (!variable) { setError('Please select a variable. Both datasets must share at least one common variable.'); return; }
     if (!isPro) { setError('Dataset comparison requires a Pro subscription.'); return; }
 
     try {
@@ -87,7 +106,7 @@ const DatasetComparison = () => {
                 </select>
               )}
             </div>
-            <div className="flex items-center justify-center pb-2 hidden lg:flex">
+            <div className="hidden lg:flex items-center justify-center pb-2">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">VS</div>
             </div>
             <div className="space-y-2">
@@ -116,9 +135,10 @@ const DatasetComparison = () => {
                 onChange={(e) => setVariable(e.target.value)}
                 className="w-full h-11 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-primary focus:border-primary"
               >
-                <option value="temperature">Surface Temperature</option>
-                <option value="precipitation">Precipitation</option>
-                <option value="pressure">Sea Level Pressure</option>
+                <option value="">— Select Variable —</option>
+                {commonVars.map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
               </select>
             </div>
             <button
@@ -143,15 +163,35 @@ const DatasetComparison = () => {
 
         {/* Results — real data from backend */}
         {result && (
-          <div className="space-y-6">
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+          <div className="space-y-8">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm mb-6">
+              <h3 className="font-bold text-lg flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary">difference</span>
-                Comparison Results
+                Absolute Difference (B - A)
               </h3>
-              <pre className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 text-xs font-mono text-slate-700 dark:text-slate-300 overflow-x-auto">
-                {JSON.stringify(result, null, 2)}
-              </pre>
+              <p className="text-sm text-slate-500 mb-4">Positive values mean Dataset B is higher. Negative means Dataset A is higher.</p>
+              <PlotlyHeatmap
+                data={{ ...result.difference, latitudes: result.datasetA?.latitudes, longitudes: result.datasetA?.longitudes, variable: result.variable }}
+                title={`${result.variable?.toUpperCase() || 'Variable'} — Difference (B − A)`}
+              />
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary">calendar_today</span>
+                  Dataset A — {selectedA?.name || selectedA?.filename || ''}
+                </h3>
+                <PlotlyHeatmap data={{ ...result.datasetA, variable: result.variable }} title={`${selectedA?.name || 'Dataset A'} — ${result.variable?.toUpperCase() || ''}`} />
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary">event</span>
+                  Dataset B — {selectedB?.name || selectedB?.filename || ''}
+                </h3>
+                <PlotlyHeatmap data={{ ...result.datasetB, variable: result.variable }} title={`${selectedB?.name || 'Dataset B'} — ${result.variable?.toUpperCase() || ''}`} />
+              </div>
             </div>
           </div>
         )}

@@ -10,12 +10,18 @@ import numpy as np
 
 
 def load_grid(filepath, variable, year=None):
-    ds = xr.open_dataset(filepath, engine="netcdf4")
+    time_coder = xr.coders.CFDatetimeCoder(use_cftime=True)
+    ds = xr.open_dataset(filepath, engine="netcdf4", decode_times=time_coder)
     data = ds[variable]
     if year and "time" in data.dims:
         data = data.sel(time=data.time.dt.year == int(year)).mean(dim="time", skipna=True)
     elif "time" in data.dims:
         data = data.mean(dim="time", skipna=True)
+    # Squeeze out any remaining non-lat/lon dims (e.g. 'level', 'plev')
+    for dim in list(data.dims):
+        if dim not in ("lat", "lon", "latitude", "longitude"):
+            data = data.isel({dim: 0})
+
     lat_key = "latitude" if "latitude" in ds.coords else "lat"
     lon_key = "longitude" if "longitude" in ds.coords else "lon"
     lats = ds[lat_key].values.tolist()

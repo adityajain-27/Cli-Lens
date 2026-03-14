@@ -78,6 +78,32 @@ export const getLocationTrend = async (req, res) => {
   }
 };
 
+// @desc  Get global spatial mean time series
+// @route GET /api/viz/global-mean
+// @access Private
+export const getGlobalMean = async (req, res) => {
+  try {
+    const { datasetId, variable } = req.query;
+
+    if (!datasetId || !variable) {
+      return res.status(400).json({ message: "datasetId and variable are required" });
+    }
+
+    const dataset = await Dataset.findById(datasetId);
+    if (!dataset) return res.status(404).json({ message: "Dataset not found" });
+
+    const result = await runPythonScript("get_time_series.py", [
+      dataset.filepath,
+      variable,
+      "--global-mean",
+    ]);
+
+    return res.status(200).json(result);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc  Compare two datasets for the same variable (Pro feature)
 // @route GET /api/viz/compare-datasets
 // @access Private (Pro tier)

@@ -1,13 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { upgradeToPro } from '../services/api';
+import { upgradeToPro, getMapData, listDatasets } from '../services/api';
+import PlotlyHeatmap from '../components/PlotlyHeatmap';
 
 const PublicDashboard = () => {
   const { user, saveAuth, token } = useAuth();
   const navigate = useNavigate();
   const [upgrading, setUpgrading] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
+
+  // Map Data State
+  const [datasets, setDatasets] = useState([]);
+  const [selectedDatasetId, setSelectedDatasetId] = useState('');
+  const [mapData, setMapData] = useState(null);
+  const [loadingMap, setLoadingMap] = useState(false);
+
+  useEffect(() => {
+    if (user?.tier === 'pro') {
+      listDatasets().then((data) => {
+        setDatasets(data);
+        if (data.length > 0) {
+          setSelectedDatasetId(data[0]._id);
+        }
+      }).catch(() => {});
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user?.tier === 'pro' && selectedDatasetId) {
+      setLoadingMap(true);
+      // Use the first variable available from the selected dataset instead of hardcoding 'temperature'
+      const ds = datasets.find(d => d._id === selectedDatasetId);
+      const variable = ds?.variables?.[0] || 'air';
+      getMapData(selectedDatasetId, variable)
+        .then((data) => setMapData(data))
+        .catch(() => {})
+        .finally(() => setLoadingMap(false));
+    }
+  }, [user, selectedDatasetId, datasets]);
 
   const handleUpgrade = async () => {
     if (!token) { navigate('/login'); return; }
@@ -202,29 +233,61 @@ const PublicDashboard = () => {
                 </div>
               </div>
 
-              {/* Locked Map */}
+              {/* Map rendering based on User Tier */}
               <div className="relative bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden group">
-                <div className="p-5 md:p-6 border-b border-slate-100 dark:border-slate-800">
+                <div className="p-5 md:p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
                   <h4 className="font-bold text-base md:text-lg">Global Climate Map</h4>
-                </div>
-                <div className="flex-1 bg-slate-100 dark:bg-slate-800 relative h-64 lg:h-auto overflow-hidden">
-                  <div className="w-full h-full opacity-40 grayscale" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #1e293b 100%)' }}></div>
-                  <div className="absolute inset-0 bg-white/70 dark:bg-slate-900/80 backdrop-blur-[2px] flex flex-col items-center justify-center p-6 text-center z-10">
-                    <div className="size-12 md:size-16 bg-primary rounded-full flex items-center justify-center text-white mb-4 shadow-lg shadow-primary/30">
-                      <span className="material-symbols-outlined text-2xl md:text-3xl">lock</span>
-                    </div>
-                    <h5 className="text-lg md:text-xl font-bold mb-2">Upgrade to Pro</h5>
-                    <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mb-6">Access interactive real-time heatmaps and high-resolution climate overlays.</p>
-                    <button
-                      id="upgrade-map-btn"
-                      onClick={handleUpgrade}
-                      disabled={upgrading}
-                      className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-3 rounded-xl font-bold text-sm hover:scale-[1.02] transition-transform disabled:opacity-60"
+                  {user?.tier === 'pro' && datasets.length > 0 && (
+                    <select
+                      value={selectedDatasetId}
+                      onChange={(e) => setSelectedDatasetId(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:ring-primary"
                     >
-                      {upgrading ? 'Upgrading…' : 'Unlock Premium Maps'}
-                    </button>
-                  </div>
+                      {datasets.map(d => (
+                        <option key={d._id} value={d._id}>{d.name || d.filename}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
+                
+                {user?.tier !== 'pro' ? (
+                  <div className="flex-1 bg-slate-100 dark:bg-slate-800 relative h-64 lg:h-auto overflow-hidden">
+                    <div className="w-full h-full opacity-40 grayscale" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #1e293b 100%)' }}></div>
+                    <div className="absolute inset-0 bg-white/70 dark:bg-slate-900/80 backdrop-blur-[2px] flex flex-col items-center justify-center p-6 text-center z-10">
+                      <div className="size-12 md:size-16 bg-primary rounded-full flex items-center justify-center text-white mb-4 shadow-lg shadow-primary/30">
+                        <span className="material-symbols-outlined text-2xl md:text-3xl">lock</span>
+                      </div>
+                      <h5 className="text-lg md:text-xl font-bold mb-2">Upgrade to Pro</h5>
+                      <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mb-6">Access interactive real-time heatmaps and high-resolution climate overlays.</p>
+                      <button
+                        id="upgrade-map-btn"
+                        onClick={handleUpgrade}
+                        disabled={upgrading}
+                        className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-3 rounded-xl font-bold text-sm hover:scale-[1.02] transition-transform disabled:opacity-60"
+                      >
+                        {upgrading ? 'Upgrading…' : 'Unlock Premium Maps'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 min-h-[400px] flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+                    {loadingMap ? (
+                      <div className="flex items-center gap-2 text-primary animate-pulse">
+                        <span className="material-symbols-outlined animate-spin">autorenew</span>
+                        <span className="font-bold">Rendering Map Data...</span>
+                      </div>
+                    ) : (
+                      mapData ? (
+                        <PlotlyHeatmap data={mapData} title="Interactive Surface Map" />
+                      ) : (
+                        <div className="p-12 text-center text-slate-400">
+                          <span className="material-symbols-outlined text-4xl mb-4 block opacity-50">map</span>
+                          <p>Upload a dataset in the researcher dashboard to view.</p>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

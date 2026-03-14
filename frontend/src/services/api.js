@@ -94,6 +94,12 @@ export const compareDatasets = (datasetIdA, datasetIdB, variable, yearA = '', ye
     headers: authHeaders(),
   });
 
+// GET /api/viz/global-mean?datasetId&variable
+export const getGlobalMean = (datasetId, variable) =>
+  request(`/viz/global-mean?datasetId=${datasetId}&variable=${encodeURIComponent(variable)}`, {
+    headers: authHeaders(),
+  });
+
 // ─── Predictions ─────────────────────────────────────────────
 // GET /api/prediction/trend?datasetId&variable&lat&lon
 export const getPredictionTrend = (datasetId, variable, lat, lon) =>

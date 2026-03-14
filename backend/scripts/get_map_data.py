@@ -10,7 +10,8 @@ import numpy as np
 
 
 def get_map_data(filepath, variable, year=None):
-    ds = xr.open_dataset(filepath, engine="netcdf4")
+    time_coder = xr.coders.CFDatetimeCoder(use_cftime=True)
+    ds = xr.open_dataset(filepath, engine="netcdf4", decode_times=time_coder)
 
     if variable not in ds:
         print(json.dumps({"error": f"Variable '{variable}' not found in dataset"}))
@@ -27,6 +28,11 @@ def get_map_data(filepath, variable, year=None):
     elif "time" in data.dims:
         # Default: annual mean over all times
         data = data.mean(dim="time", skipna=True)
+
+    # Squeeze out any remaining non-lat/lon dims (e.g. 'level', 'plev')
+    for dim in list(data.dims):
+        if dim not in ("lat", "lon", "latitude", "longitude"):
+            data = data.isel({dim: 0})
 
     # Resolve lat/lon key names
     lat_key = "latitude" if "latitude" in ds.coords else "lat"

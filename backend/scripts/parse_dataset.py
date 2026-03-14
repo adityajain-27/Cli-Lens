@@ -10,7 +10,8 @@ import numpy as np
 
 
 def parse_dataset(filepath):
-    ds = xr.open_dataset(filepath, engine="netcdf4")
+    time_coder = xr.coders.CFDatetimeCoder(use_cftime=True)
+    ds = xr.open_dataset(filepath, engine="netcdf4", decode_times=time_coder)
 
     # Extract variable names (exclude coordinate variables)
     coords = set(ds.coords.keys())

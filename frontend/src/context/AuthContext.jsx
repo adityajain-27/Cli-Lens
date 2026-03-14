@@ -1,27 +1,43 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext(null);
 
-// ─── AUTH BYPASS MODE ──────────────────────────────────────────────────────────
-// A mock user is injected so all dashboard pages render with realistic data.
-// TODO: Remove MOCK_USER and un-comment the real useEffect below when backend is live.
-const MOCK_USER = {
-  _id:             'mock-user-001',
-  name:            'Dr. Aditya Jain',
-  email:           'aditya@pyclima.dev',
-  role:            'researcher',   // 'researcher' | 'public'
-  tier:            'pro',          // 'pro' | 'free'
-  datasetsAnalyzed: 2,
-  token:           'mock-jwt-token',
-};
-// ──────────────────────────────────────────────────────────────────────────────
-
 export const AuthProvider = ({ children }) => {
-  const [user, setUser]   = useState(MOCK_USER);
-  const [token, setToken] = useState(MOCK_USER.token);
-  const [loading]         = useState(false); // never "loading" in bypass mode
+  const [user, setUser]     = useState(null);
+  const [token, setToken]   = useState(localStorage.getItem('token'));
+  const [loading, setLoading] = useState(!!localStorage.getItem('token')); // only load if token exists
 
-  // Retain these so the real implementation wires in without changing call sites
+  // On mount, if a token exists in localStorage, fetch the real user profile
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const storedToken = localStorage.getItem('token');
+      if (!storedToken) { setLoading(false); return; }
+      try {
+        const res = await fetch('/api/auth/profile', {
+          headers: { Authorization: `Bearer ${storedToken}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data);
+          setToken(storedToken);
+        } else {
+          // Token expired or invalid
+          localStorage.removeItem('token');
+          setToken(null);
+          setUser(null);
+        }
+      } catch {
+        // Backend unreachable — clear stale token
+        localStorage.removeItem('token');
+        setToken(null);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, []);
+
   const saveAuth = (userData) => {
     localStorage.setItem('token', userData.token);
     setToken(userData.token);

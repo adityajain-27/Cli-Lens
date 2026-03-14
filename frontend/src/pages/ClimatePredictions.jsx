@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { listDatasets, getPredictionTrend } from '../services/api';
+import { listDatasets, getLocationTrend, getGlobalMean } from '../services/api';
+import PlotlyLineChart from '../components/PlotlyLineChart';
 
 const ClimatePredictions = () => {
   const { isPro } = useAuth();
@@ -9,14 +10,25 @@ const ClimatePredictions = () => {
   const [loadingDatasets, setLoadingDatasets] = useState(true);
 
   const [datasetId, setDatasetId] = useState('');
-  const [variable, setVariable] = useState('temperature');
+  const [variable, setVariable] = useState('');
   const [lat, setLat] = useState('28.6');
   const [lon, setLon] = useState('77.2');
 
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [runId] = useState(() => `CP-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`);
+  // Get the real variables from the selected dataset
+  const selectedDs = datasets.find(d => d._id === datasetId);
+  const dataVars = (selectedDs?.variables || []).filter(
+    v => !['climatology_bounds', 'valid_yr_count', 'lat', 'lon', 'level', 'time', 'latitude', 'longitude'].includes(v)
+  );
+
+  // Location time series state
+  const [locationResult, setLocationResult] = useState(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState('');
+
+  // Global spatial mean state
+  const [globalResult, setGlobalResult] = useState(null);
+  const [globalLoading, setGlobalLoading] = useState(false);
+  const [globalError, setGlobalError] = useState('');
 
   useEffect(() => {
     listDatasets()
@@ -25,22 +37,31 @@ const ClimatePredictions = () => {
       .finally(() => setLoadingDatasets(false));
   }, []);
 
-  const handleGenerate = async () => {
-    setError('');
-    setResult(null);
-    if (!datasetId) { setError('Please select a dataset.'); return; }
-    if (!lat || !lon) { setError('Please provide latitude and longitude.'); return; }
-    if (!isPro) { setError('Climate predictions require a Pro subscription.'); return; }
-    try {
-      setLoading(true);
-      const data = await getPredictionTrend(datasetId, variable, lat, lon);
-      setResult(data);
-    } catch (err) {
-      setError(err.message || 'Prediction failed.');
-    } finally {
-      setLoading(false);
-    }
+  const handleAnalyze = async () => {
+    if (!datasetId || !variable) return;
+
+    // Run both analyses in parallel
+    setLocationError('');
+    setLocationResult(null);
+    setLocationLoading(true);
+    setGlobalError('');
+    setGlobalResult(null);
+    setGlobalLoading(true);
+
+    // Location time series
+    getLocationTrend(datasetId, variable, lat, lon)
+      .then(data => setLocationResult(data))
+      .catch(err => setLocationError(err.message || 'Time series analysis failed.'))
+      .finally(() => setLocationLoading(false));
+
+    // Global spatial mean
+    getGlobalMean(datasetId, variable)
+      .then(data => setGlobalResult(data))
+      .catch(err => setGlobalError(err.message || 'Global mean analysis failed.'))
+      .finally(() => setGlobalLoading(false));
   };
+
+  const anyLoading = locationLoading || globalLoading;
 
   return (
     <>
@@ -49,20 +70,10 @@ const ClimatePredictions = () => {
         <div className="flex items-center gap-4 flex-1">
           <div className="relative w-full max-w-md hidden sm:block">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
-            <input
-              readOnly
-              className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-sm focus:ring-2 focus:ring-primary/50"
-              placeholder="Search datasets or models..."
-              type="text"
-            />
+            <input readOnly className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-sm" placeholder="Search datasets or models..." type="text" />
           </div>
         </div>
         <div className="flex items-center gap-4">
-          {!isPro && (
-            <span className="hidden sm:inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-xs font-bold px-3 py-1 rounded-full">
-              <span className="material-symbols-outlined text-sm">lock</span> Pro Feature
-            </span>
-          )}
           <button className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full">
             <span className="material-symbols-outlined">notifications</span>
           </button>
@@ -73,23 +84,16 @@ const ClimatePredictions = () => {
       <div className="p-6 md:p-8 space-y-6 overflow-y-auto flex-1 bg-background-light dark:bg-background-dark">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
           <div>
-            <h2 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white font-display">Climate Predictions</h2>
-            <p className="text-slate-500 mt-1">Generate multi-decadal climate forecasts using ensemble ML models.</p>
-          </div>
-          <div className="flex gap-2 text-xs font-mono bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700">
-            <span className="text-slate-400">RUN_ID:</span>
-            <span className="text-primary">{runId}</span>
+            <h2 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white font-display flex items-center gap-3">
+              <span className="material-symbols-outlined text-primary text-3xl">query_stats</span>
+              Time-Series Trend Analysis
+            </h2>
+            <p className="text-slate-500 mt-1">Analyze temporal trends with rolling mean, linear regression, and anomaly detection.</p>
           </div>
         </div>
 
         {/* Config Bar */}
         <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          {!isPro && (
-            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700 flex items-center gap-2">
-              <span className="material-symbols-outlined text-lg">lock</span>
-              Predictions require a <strong>Pro</strong> subscription.
-            </div>
-          )}
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
             {/* Dataset */}
             <div className="space-y-1.5">
@@ -100,7 +104,14 @@ const ClimatePredictions = () => {
                 <select
                   id="pred-dataset"
                   value={datasetId}
-                  onChange={(e) => setDatasetId(e.target.value)}
+                  onChange={(e) => {
+                    setDatasetId(e.target.value);
+                    const ds = datasets.find(d => d._id === e.target.value);
+                    const vars = (ds?.variables || []).filter(
+                      v => !['climatology_bounds', 'valid_yr_count', 'lat', 'lon', 'level', 'time', 'latitude', 'longitude'].includes(v)
+                    );
+                    setVariable(vars[0] || '');
+                  }}
                   className="w-full h-11 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-primary"
                 >
                   <option value="">— Select Dataset —</option>
@@ -120,9 +131,10 @@ const ClimatePredictions = () => {
                 onChange={(e) => setVariable(e.target.value)}
                 className="w-full h-11 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-primary"
               >
-                <option value="temperature">Avg Temperature (°C)</option>
-                <option value="precipitation">Precipitation (mm)</option>
-                <option value="pressure">Surface Pressure</option>
+                <option value="">— Select Variable —</option>
+                {dataVars.map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
               </select>
             </div>
 
@@ -130,12 +142,7 @@ const ClimatePredictions = () => {
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400" htmlFor="pred-lat">Latitude</label>
               <input
-                id="pred-lat"
-                type="number"
-                step="0.1"
-                min="-90"
-                max="90"
-                value={lat}
+                id="pred-lat" type="number" step="0.1" min="-90" max="90" value={lat}
                 onChange={(e) => setLat(e.target.value)}
                 className="w-full h-11 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm px-3 focus:ring-2 focus:ring-primary/20 outline-none"
                 placeholder="28.6"
@@ -146,12 +153,7 @@ const ClimatePredictions = () => {
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400" htmlFor="pred-lon">Longitude</label>
               <input
-                id="pred-lon"
-                type="number"
-                step="0.1"
-                min="-180"
-                max="180"
-                value={lon}
+                id="pred-lon" type="number" step="0.1" min="-180" max="360" value={lon}
                 onChange={(e) => setLon(e.target.value)}
                 className="w-full h-11 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm px-3 focus:ring-2 focus:ring-primary/20 outline-none"
                 placeholder="77.2"
@@ -161,97 +163,108 @@ const ClimatePredictions = () => {
             {/* Spacer */}
             <div className="hidden lg:block"></div>
 
-            {/* Generate button */}
+            {/* Analyze button */}
             <button
               id="pred-generate"
-              onClick={handleGenerate}
-              disabled={loading || !isPro}
+              onClick={handleAnalyze}
+              disabled={anyLoading || !datasetId || !variable}
               className="bg-primary hover:bg-primary/90 disabled:opacity-60 text-white font-bold h-11 px-4 rounded-lg text-sm flex items-center justify-center gap-2 transition-all"
             >
-              {loading ? (
-                <><span className="material-symbols-outlined text-lg animate-spin">autorenew</span> Running…</>
+              {anyLoading ? (
+                <><span className="material-symbols-outlined text-lg animate-spin">autorenew</span> Analyzing…</>
               ) : (
-                <><span className="material-symbols-outlined text-lg">auto_awesome</span> Generate</>
+                <><span className="material-symbols-outlined text-lg">query_stats</span> Analyze</>
               )}
             </button>
           </div>
         </div>
 
-        {/* Error */}
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>
+        {/* Errors */}
+        {locationError && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{locationError}</div>
         )}
 
-        {/* Results */}
-        {result && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-6">
-            <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">monitoring</span>
-              Prediction Results — {variable} at ({lat}°, {lon}°)
-            </h3>
-
-            {/* If the backend returns a time series, render it */}
-            {result.timeSeries && Array.isArray(result.timeSeries) && (
-              <div className="mb-4">
-                <div className="h-48 relative flex items-end gap-1">
-                  {result.timeSeries.map((pt, idx) => (
-                    <div
-                      key={idx}
-                      className="flex-1 bg-primary rounded-t"
-                      style={{
-                        height: `${Math.min(100, Math.max(5, ((pt.value - Math.min(...result.timeSeries.map(p => p.value))) / (Math.max(...result.timeSeries.map(p => p.value)) - Math.min(...result.timeSeries.map(p => p.value)) || 1)) * 100))}%`,
-                      }}
-                      title={`${pt.year}: ${pt.value}`}
-                    />
-                  ))}
-                </div>
-                <div className="flex justify-between text-[10px] font-mono text-slate-400 mt-2">
-                  <span>{result.timeSeries[0]?.year}</span>
-                  <span>{result.timeSeries[result.timeSeries.length - 1]?.year}</span>
-                </div>
+        {/* Section 1: Location Time Series Trend Analysis */}
+        {locationResult && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-primary text-2xl">timeline</span>
+              <div>
+                <h3 className="font-bold text-lg">
+                  {variable.toUpperCase()} Time Series at {locationResult.actualLat?.toFixed(1)}°{locationResult.actualLat >= 0 ? 'N' : 'S'}, {locationResult.actualLon?.toFixed(1)}°E
+                </h3>
+                <p className="text-sm text-slate-500">
+                  {locationResult.times?.length || 0} data points •
+                  {locationResult.trendPerYear != null && (
+                    <span className={locationResult.trendPerYear > 0 ? ' text-red-400' : ' text-blue-400'}>
+                      {' '}Trend: {locationResult.trendPerYear > 0 ? '+' : ''}{locationResult.trendPerYear.toFixed(4)}/yr
+                    </span>
+                  )}
+                  {locationResult.anomalyTimes?.length > 0 && (
+                    <span className="text-amber-400"> • {locationResult.anomalyTimes.length} anomalies detected</span>
+                  )}
+                </p>
               </div>
-            )}
-
-            <pre className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 text-xs font-mono text-slate-700 dark:text-slate-300 overflow-x-auto max-h-64">
-              {JSON.stringify(result, null, 2)}
-            </pre>
-
-            {/* Stats */}
-            {result.confidence && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Confidence Score</p>
-                  <span className="text-2xl font-black font-mono">{(result.confidence * 100).toFixed(1)}%</span>
-                </div>
-                {result.rmse !== undefined && (
-                  <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">RMSE</p>
-                    <span className="text-2xl font-black font-mono">{result.rmse}°C</span>
-                  </div>
-                )}
-              </div>
-            )}
+            </div>
+            <PlotlyLineChart
+              data={locationResult}
+              title={`${variable.toUpperCase()} Time Series @ ${locationResult.actualLat?.toFixed(1)}°, ${locationResult.actualLon?.toFixed(1)}°`}
+              subtitle={`Showing ${variable} at ${locationResult.actualLat?.toFixed(1)}°${locationResult.actualLat >= 0 ? 'N' : 'S'}, ${locationResult.actualLon?.toFixed(1)}°E (${locationResult.times?.[0]?.slice(0, 4)}–${locationResult.times?.[locationResult.times.length - 1]?.slice(0, 4)})`}
+            />
           </div>
         )}
 
-        {/* Static chart placeholder (shown before running) */}
-        {!result && !loading && (
+        {/* Section 2: Global Spatial Mean */}
+        {globalError && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{globalError}</div>
+        )}
+
+        {globalResult && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-primary text-2xl">public</span>
+              <div>
+                <h3 className="font-bold text-lg">
+                  Global Spatial Mean Over Time — {variable.toUpperCase()}
+                </h3>
+                <p className="text-sm text-slate-500">
+                  Cosine-latitude weighted global average •
+                  {globalResult.trendPerYear != null && (
+                    <span className={globalResult.trendPerYear > 0 ? ' text-red-400' : ' text-blue-400'}>
+                      {' '}Trend: {globalResult.trendPerYear > 0 ? '+' : ''}{globalResult.trendPerYear.toFixed(4)}/yr
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+            <PlotlyLineChart
+              data={globalResult}
+              title={`${variable.toUpperCase()} (Global Mean) Time Series`}
+              subtitle="Cosine-latitude weighted global spatial mean at each time step"
+            />
+          </div>
+        )}
+
+        {/* Placeholder (shown before running) */}
+        {!locationResult && !globalResult && !anyLoading && (
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
               <span className="material-symbols-outlined text-primary">monitoring</span>
-              <h3 className="font-bold text-lg">Temperature Forecast</h3>
-              <span className="text-xs text-slate-400 ml-auto">Select parameters above and click Generate</span>
+              <h3 className="font-bold text-lg">Time-Series Trend Analysis</h3>
+              <span className="text-xs text-slate-400 ml-auto">Select parameters above and click Analyze</span>
             </div>
             <div className="h-64 w-full relative flex flex-col justify-end items-center p-8 text-slate-300">
               <svg className="w-full h-full absolute inset-0" preserveAspectRatio="none" viewBox="0 0 1000 300">
-                <line className="text-slate-200 dark:text-slate-800" stroke="currentColor" strokeWidth="1" x1="0" x2="1000" y1="50" y2="50"></line>
-                <line className="text-slate-200 dark:text-slate-800" stroke="currentColor" strokeWidth="1" x1="0" x2="1000" y1="150" y2="150"></line>
-                <line className="text-slate-200 dark:text-slate-800" stroke="currentColor" strokeWidth="1" x1="0" x2="1000" y1="250" y2="250"></line>
-                <path d="M 0 220 Q 50 230 100 200 Q 150 170 200 190 Q 250 210 300 180 Q 350 160 400 175 Q 450 190 500 160 Q 550 130 600 150" fill="none" stroke="#2a77f4" strokeLinecap="round" strokeWidth="3"></path>
-                <path d="M 600 150 Q 700 120 800 100 Q 900 80 1000 60" fill="none" stroke="#f59e0b" strokeDasharray="8 6" strokeLinecap="round" strokeWidth="3"></path>
-                <path d="M 600 150 Q 700 120 800 100 Q 900 80 1000 60 L 1000 140 Q 900 160 800 180 Q 700 200 600 150" fill="rgba(245, 158, 11, 0.15)"></path>
+                <line className="text-slate-200 dark:text-slate-800" stroke="currentColor" strokeWidth="1" x1="0" x2="1000" y1="50" y2="50" />
+                <line className="text-slate-200 dark:text-slate-800" stroke="currentColor" strokeWidth="1" x1="0" x2="1000" y1="150" y2="150" />
+                <line className="text-slate-200 dark:text-slate-800" stroke="currentColor" strokeWidth="1" x1="0" x2="1000" y1="250" y2="250" />
+                <path d="M 0 220 Q 50 230 100 200 Q 150 170 200 190 Q 250 210 300 180 Q 350 160 400 175 Q 450 190 500 160 Q 550 130 600 150" fill="none" stroke="#22d3ee" strokeLinecap="round" strokeWidth="2" />
+                <path d="M 0 225 Q 100 215 200 195 Q 300 190 400 180 Q 500 165 600 155" fill="none" stroke="rgba(255,255,255,0.4)" strokeDasharray="4 3" strokeLinecap="round" strokeWidth="1.5" />
+                <path d="M 0 230 L 600 140" fill="none" stroke="#f59e0b" strokeDasharray="8 6" strokeLinecap="round" strokeWidth="2" />
+                <circle cx="350" cy="160" r="5" fill="#ef4444" stroke="#fca5a5" strokeWidth="1.5" />
+                <circle cx="520" cy="140" r="5" fill="#ef4444" stroke="#fca5a5" strokeWidth="1.5" />
               </svg>
-              <p className="relative text-sm text-slate-400">Run a prediction to see real forecast data from the backend</p>
+              <p className="relative text-sm text-slate-400">Select a dataset and click Analyze to see trend analysis with rolling mean, trend line, and anomaly detection</p>
             </div>
           </div>
         )}
