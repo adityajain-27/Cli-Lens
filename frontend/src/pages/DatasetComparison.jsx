@@ -173,6 +173,7 @@ const DatasetComparison = () => {
               <PlotlyHeatmap
                 data={{ ...result.difference, latitudes: result.datasetA?.latitudes, longitudes: result.datasetA?.longitudes, variable: result.variable }}
                 title={`${result.variable?.toUpperCase() || 'Variable'} — Difference (B − A)`}
+                isDifference={true}
               />
             </div>
             

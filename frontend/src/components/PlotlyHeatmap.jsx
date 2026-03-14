@@ -28,7 +28,7 @@ const getUnit = (variable) => {
   return VARIABLE_UNITS[key] || '';
 };
 
-const PlotlyHeatmap = ({ data, title }) => {
+const PlotlyHeatmap = ({ data, title, isDifference = false }) => {
   if (!data || !data.latitudes || !data.longitudes || !data.values) {
     return <div className="p-4 text-center text-slate-500">No data available to plot.</div>;
   }
@@ -37,6 +37,9 @@ const PlotlyHeatmap = ({ data, title }) => {
   const colorbarTitle = data.variable
     ? `${data.variable.toUpperCase()}${unit ? ` (${unit})` : ''}`
     : 'Value';
+
+  // Diverging (RdBu) for difference, sequential (Viridis) for absolute values
+  const colorscale = isDifference ? 'RdBu' : 'YlOrRd';
 
   return (
     <div className="w-full flex justify-center bg-white dark:bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm relative">
@@ -47,8 +50,9 @@ const PlotlyHeatmap = ({ data, title }) => {
             x: data.longitudes,
             y: data.latitudes,
             type: 'heatmap',
-            colorscale: 'RdBu',
-            reversescale: true,
+            colorscale: colorscale,
+            reversescale: isDifference,
+            zmid: isDifference ? 0 : undefined,
             hovertemplate:
               'Lat: %{y:.1f}°<br>Lon: %{x:.1f}°<br>Value: %{z:.3f}' +
               (unit ? ` ${unit}` : '') +
