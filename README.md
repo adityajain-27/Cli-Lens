@@ -79,7 +79,8 @@ No code. No setup. Just answers.
 - Live global climate headlines via GNews API
 - Context alongside your own data analysis
 
-### 🔐 Authentication & Tiered Access
+### 💰 SaaS Model & Tiered Access
+- Built as a **Software as a Service (SaaS)** platform with a freemium model.
 - JWT-based signup/login with role selection (Researcher / Analyst)
 - **Free tier** — full visualization & analysis
 - **Pro tier** — unlocks report downloads, exports, and advanced features
