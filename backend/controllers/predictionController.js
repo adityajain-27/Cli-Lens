@@ -49,7 +49,7 @@ export const getPredictionTrend = async (req, res) => {
         }
 
         const result = await runPythonScript("predict_trend.py", [
-            dataset.filepath, 
+            path.join("uploads", dataset.filename), 
             variable, 
             lat, 
             lon

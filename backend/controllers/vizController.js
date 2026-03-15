@@ -40,7 +40,7 @@ export const getMapData = async (req, res) => {
     if (!dataset) return res.status(404).json({ message: "Dataset not found" });
 
     const result = await runPythonScript("get_map_data.py", [
-      dataset.filepath,
+      path.join("uploads", dataset.filename),
       variable,
       year || "",
     ]);
@@ -66,7 +66,7 @@ export const getLocationTrend = async (req, res) => {
     if (!dataset) return res.status(404).json({ message: "Dataset not found" });
 
     const result = await runPythonScript("get_time_series.py", [
-      dataset.filepath,
+      path.join("uploads", dataset.filename),
       variable,
       lat,
       lon,
@@ -125,8 +125,8 @@ export const compareDatasets = async (req, res) => {
     if (!dsA || !dsB) return res.status(404).json({ message: "One or both datasets not found" });
 
     const result = await runPythonScript("compare_datasets.py", [
-      dsA.filepath,
-      dsB.filepath,
+      path.join("uploads", dsA.filename),
+      path.join("uploads", dsB.filename),
       variable,
       yearA || "",
       yearB || "",
