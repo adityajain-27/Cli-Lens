@@ -18,8 +18,19 @@ connectDB();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Ensure uploads directory exists (needed for Render ephemeral filesystem)
+import fs from "fs";
+import path from "path";
+const uploadDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 // ---------- Middleware ----------
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
